@@ -23,6 +23,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .brand-symbol-wrap,
+  .brand-frame,
   .brand-step,
   .brand-copy {
     animation: none !important;

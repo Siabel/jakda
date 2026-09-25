@@ -59,6 +59,10 @@ test("uses the Jakda brand across UI, metadata, and PWA assets", async () => {
   assert.match(theme, /--orange: #e87932/);
   assert.match(theme, /\.auth-story \.brand-copy em/);
   assert.match(theme, /color: #ffd19f/);
+  assert.match(ui, /brand-symbol-wrap/);
+  assert.match(theme, /jakda-breathe/);
+  assert.match(theme, /jakda-step-hop/);
+  assert.match(theme, /prefers-reduced-motion: reduce/);
   assert.match(favicon, /#4658A6/);
 });
 test("includes account, place, and daily-record flows", async () => {

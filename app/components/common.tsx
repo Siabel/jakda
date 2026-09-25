@@ -13,41 +13,43 @@ export function BrandLogo({
       className={`brand-logo ${compact ? "compact" : ""} ${inverse ? "inverse" : ""}`}
       aria-label="작은다음, 작다"
     >
-      <svg className="brand-symbol" viewBox="0 0 48 48" aria-hidden="true">
-        <rect
-          className="brand-frame"
-          x="3"
-          y="3"
-          width="42"
-          height="42"
-          rx="14"
-        />
-        <path className="brand-path" d="M12 34.5h8v-9h8v-9h8" />
-        <rect
-          className="brand-step brand-step-one"
-          x="10"
-          y="30"
-          width="9"
-          height="9"
-          rx="3"
-        />
-        <rect
-          className="brand-step brand-step-two"
-          x="20"
-          y="21"
-          width="9"
-          height="9"
-          rx="3"
-        />
-        <rect
-          className="brand-step brand-step-three"
-          x="30"
-          y="12"
-          width="9"
-          height="9"
-          rx="3"
-        />
-      </svg>
+      <span className="brand-symbol-wrap" aria-hidden="true">
+        <svg className="brand-symbol" viewBox="0 0 48 48">
+          <rect
+            className="brand-frame"
+            x="3"
+            y="3"
+            width="42"
+            height="42"
+            rx="14"
+          />
+          <path className="brand-path" d="M12 34.5h8v-9h8v-9h8" />
+          <rect
+            className="brand-step brand-step-one"
+            x="10"
+            y="30"
+            width="9"
+            height="9"
+            rx="3"
+          />
+          <rect
+            className="brand-step brand-step-two"
+            x="20"
+            y="21"
+            width="9"
+            height="9"
+            rx="3"
+          />
+          <rect
+            className="brand-step brand-step-three"
+            x="30"
+            y="12"
+            width="9"
+            height="9"
+            rx="3"
+          />
+        </svg>
+      </span>
       {!compact && (
         <span className="brand-copy">
           <span className="brand-name-row">
