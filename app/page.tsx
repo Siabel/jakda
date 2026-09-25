@@ -24,7 +24,18 @@ import type {
   View,
 } from "../lib/types";
 import { AuthGate, SetupRequired } from "./components/auth-gate";
-import { BrandLogo, NavButton } from "./components/common";
+import {
+  DesktopNavigation,
+  MobileNavigation,
+} from "./components/app-navigation";
+import {
+  createBlankRecord,
+  createBlankSchedule,
+  createBlankTransaction,
+  selectDayData,
+  selectMonthData,
+} from "./components/app-state";
+import { BrandLogo } from "./components/common";
 import {
   RecordModal,
   ScheduleModal,
@@ -40,60 +51,7 @@ import {
   StatsView,
   TodayView,
 } from "./components/views";
-import {
-  dateKey,
-  expenseCategories,
-  newId,
-  pad,
-} from "./components/ui-helpers";
-
-const blankSchedule = (date: string, userId: string): Schedule => ({
-  id: "",
-  userId,
-  title: "",
-  date,
-  startTime: "09:00",
-  endTime: "10:00",
-  place: "",
-  address: "",
-  actualDate: "",
-  actualStartTime: "",
-  actualEndTime: "",
-  completedAt: null,
-  people: "",
-  expectedCost: 0,
-  status: "planned",
-  memo: "",
-  isRecurring: false,
-  repeatFrequency: null,
-  repeatEndDate: null,
-  seriesId: null,
-});
-const blankTransaction = (date: string, userId: string): Transaction => ({
-  id: "",
-  userId,
-  type: "expense",
-  amount: 0,
-  date,
-  category: expenseCategories[0],
-  title: "",
-  memo: "",
-  source: "manual",
-  fixed: false,
-  repeatFrequency: null,
-  repeatMonth: null,
-  repeatDay: null,
-  repeatEndDate: null,
-  seriesId: null,
-});
-const blankRecord = (date: string, userId: string): DailyRecord => ({
-  id: "",
-  userId,
-  date,
-  time: new Date().toTimeString().slice(0, 5),
-  title: "",
-  content: "",
-});
+import { dateKey, newId } from "./components/ui-helpers";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -171,51 +129,18 @@ export default function Home() {
 
   const notifyError = (error: unknown) =>
     setToast(error instanceof Error ? error.message : "저장하지 못했어요");
-  const daySchedules = useMemo(
-    () =>
-      data?.schedules
-        .filter((s) => s.date === selectedDate)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime)) ?? [],
+  const dayData = useMemo(
+    () => selectDayData(data, selectedDate),
     [data, selectedDate],
   );
-  const dayTransactions = useMemo(
-    () => data?.transactions.filter((t) => t.date === selectedDate) ?? [],
-    [data, selectedDate],
+  const monthData = useMemo(
+    () => selectMonthData(data, monthCursor),
+    [data, monthCursor],
   );
-  const dayRecords = useMemo(
-    () =>
-      data?.dailyRecords
-        .filter((r) => r.date === selectedDate)
-        .sort((a, b) => b.time.localeCompare(a.time)) ?? [],
-    [data, selectedDate],
-  );
-  const dayDiary = data?.diaries.find((d) => d.date === selectedDate);
-  const monthKey = `${monthCursor.getFullYear()}-${pad(monthCursor.getMonth() + 1)}`;
-  const monthTransactions =
-    data?.transactions.filter((t) => t.date.startsWith(monthKey)) ?? [];
-  const income = monthTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const expense = monthTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const actualScheduleIds = new Set(
-    data?.transactions
-      .filter(
-        (transaction) =>
-          transaction.source === "schedule_actual" && transaction.scheduleId,
-      )
-      .map((transaction) => transaction.scheduleId) ?? [],
-  );
-  const expected =
-    data?.schedules
-      .filter(
-        (s) =>
-          s.date.startsWith(monthKey) &&
-          s.status !== "cancelled" &&
-          !actualScheduleIds.has(s.id),
-      )
-      .reduce((sum, s) => sum + s.expectedCost, 0) ?? 0;
+  const daySchedules = dayData.schedules;
+  const dayTransactions = dayData.transactions;
+  const dayRecords = dayData.records;
+  const dayDiary = dayData.diary;
 
   const changeDate = (date: string, nextView?: View) => {
     setSelectedDate(date);
@@ -275,7 +200,7 @@ export default function Home() {
                   date: item.actualDate || item.date,
                 }
               : {
-                  ...blankTransaction(
+                  ...createBlankTransaction(
                     item.actualDate || item.date,
                     data.user.id,
                   ),
@@ -661,7 +586,7 @@ export default function Home() {
       actual
         ? { ...actual, type: "expense" }
         : {
-            ...blankTransaction(
+            ...createBlankTransaction(
               schedule.actualDate || schedule.date,
               schedule.userId,
             ),
@@ -724,100 +649,14 @@ export default function Home() {
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-      <aside className="sidebar">
-        <button
-          type="button"
-          className="sidebar-toggle"
-          aria-label={sidebarCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
-          title={sidebarCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
-          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-        >
-          {sidebarCollapsed ? "›" : "‹"}
-        </button>
-        <button
-          className="brand"
-          onClick={() => setView("today")}
-          aria-label="작은다음 오늘 화면으로 이동"
-        >
-          <BrandLogo inverse />
-        </button>
-        <nav>
-          <NavButton
-            icon="⌂"
-            label="오늘"
-            active={view === "today"}
-            onClick={() => {
-              changeDate(dateKey());
-              setView("today");
-            }}
-          />
-          <NavButton
-            icon="□"
-            label="캘린더"
-            active={view === "calendar"}
-            onClick={() => setView("calendar")}
-          />
-          <NavButton
-            icon="₩"
-            label="가계부"
-            active={view === "ledger"}
-            onClick={() => setView("ledger")}
-          />
-          <NavButton
-            icon="✎"
-            label="하루 기록"
-            active={view === "records"}
-            onClick={() => setView("records")}
-          />
-          <NavButton
-            icon="♡"
-            label="감정 일기"
-            active={view === "diary"}
-            onClick={() => setView("diary")}
-          />
-          <NavButton
-            icon="▥"
-            label="통계"
-            active={view === "stats"}
-            onClick={() => setView("stats")}
-          />
-        </nav>
-        <div className="sidebar-bottom">
-          <NavButton
-            icon="⚙"
-            label="설정"
-            active={view === "settings"}
-            onClick={() => setView("settings")}
-          />
-          <button
-            className={`profile profile-button ${view === "profile" ? "active" : ""}`}
-            onClick={() => setView("profile")}
-          >
-            <span>{data.user.name.slice(0, 1).toUpperCase()}</span>
-            <div>
-              <b>{data.user.name}</b>
-              <small>{data.user.email}</small>
-            </div>
-          </button>
-        </div>
-      </aside>
-
-      <header className="mobile-topbar">
-        <button
-          className="mobile-brand"
-          onClick={() => changeMobileView("today")}
-          aria-label="작은다음 오늘 화면으로 이동"
-        >
-          <BrandLogo />
-        </button>
-        <button
-          className={`mobile-profile ${view === "profile" ? "active" : ""}`}
-          aria-label="프로필 열기"
-          onClick={() => changeMobileView("profile")}
-        >
-          <span>{data.user.name.slice(0, 1).toUpperCase()}</span>
-        </button>
-      </header>
+      <DesktopNavigation
+        view={view}
+        user={data.user}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        onView={setView}
+        onToday={() => changeDate(dateKey(), "today")}
+      />
 
       <main className={`content view-${view}`}>
         {view === "today" && (
@@ -828,7 +667,7 @@ export default function Home() {
             diary={dayDiary}
             records={dayRecords}
             onAdd={() =>
-              setScheduleDraft(blankSchedule(selectedDate, data.user.id))
+              setScheduleDraft(createBlankSchedule(selectedDate, data.user.id))
             }
             onEdit={setScheduleDraft}
             onMenu={setMenuId}
@@ -849,7 +688,7 @@ export default function Home() {
             onSelect={changeDate}
             onAdd={(date, startTime, endTime) =>
               setScheduleDraft({
-                ...blankSchedule(date, data.user.id),
+                ...createBlankSchedule(date, data.user.id),
                 startTime: startTime ?? "09:00",
                 endTime: endTime ?? "10:00",
               })
@@ -862,16 +701,14 @@ export default function Home() {
           <LedgerView
             cursor={monthCursor}
             setCursor={setMonthCursor}
-            transactions={monthTransactions}
-            schedules={data.schedules.filter((s) =>
-              s.date.startsWith(monthKey),
-            )}
-            income={income}
-            expense={expense}
-            expected={expected}
+            transactions={monthData.transactions}
+            schedules={monthData.schedules}
+            income={monthData.income}
+            expense={monthData.expense}
+            expected={monthData.expected}
             onAdd={() => {
               setActualScheduleId(null);
-              setTxDraft(blankTransaction(selectedDate, data.user.id));
+              setTxDraft(createBlankTransaction(selectedDate, data.user.id));
             }}
             onEdit={(transaction) => {
               setActualScheduleId(null);
@@ -894,7 +731,7 @@ export default function Home() {
             records={dayRecords}
             schedules={daySchedules}
             onAdd={() =>
-              setRecordDraft(blankRecord(selectedDate, data.user.id))
+              setRecordDraft(createBlankRecord(selectedDate, data.user.id))
             }
             onEdit={setRecordDraft}
             onDelete={deleteRecord}
@@ -912,7 +749,7 @@ export default function Home() {
             onSave={saveDiary}
             onAddUnplanned={() =>
               setScheduleDraft({
-                ...blankSchedule(selectedDate, data.user.id),
+                ...createBlankSchedule(selectedDate, data.user.id),
                 status: "done",
               })
             }
@@ -931,97 +768,28 @@ export default function Home() {
         )}
       </main>
 
-      <div className="mobile-nav">
-        <NavButton
-          icon="⌂"
-          label="오늘"
-          active={view === "today"}
-          onClick={() => {
-            changeDate(dateKey());
-            changeMobileView("today");
-          }}
-        />
-        <NavButton
-          icon="□"
-          label="캘린더"
-          active={view === "calendar"}
-          onClick={() => changeMobileView("calendar")}
-        />
-        <button
-          className="mobile-add"
-          aria-label={
-            view === "ledger"
-              ? "거래 추가"
-              : view === "records"
-                ? "하루 기록 추가"
-                : "선택한 날짜에 일정 추가"
+      <MobileNavigation
+        view={view}
+        user={data.user}
+        moreOpen={mobileMenuOpen}
+        onView={changeMobileView}
+        onToday={() => {
+          changeDate(dateKey());
+          changeMobileView("today");
+        }}
+        onAdd={() => {
+          setMobileMenuOpen(false);
+          if (view === "ledger") {
+            setActualScheduleId(null);
+            setTxDraft(createBlankTransaction(selectedDate, data.user.id));
+          } else if (view === "records") {
+            setRecordDraft(createBlankRecord(selectedDate, data.user.id));
+          } else {
+            setScheduleDraft(createBlankSchedule(selectedDate, data.user.id));
           }
-          onClick={() => {
-            setMobileMenuOpen(false);
-            if (view === "ledger") {
-              setActualScheduleId(null);
-              setTxDraft(blankTransaction(selectedDate, data.user.id));
-            } else if (view === "records") {
-              setRecordDraft(blankRecord(selectedDate, data.user.id));
-            } else {
-              setScheduleDraft(blankSchedule(selectedDate, data.user.id));
-            }
-          }}
-        >
-          ＋
-        </button>
-        <NavButton
-          icon="₩"
-          label="가계부"
-          active={view === "ledger"}
-          onClick={() => changeMobileView("ledger")}
-        />
-        <NavButton
-          icon="•••"
-          label="더보기"
-          active={
-            mobileMenuOpen ||
-            ["stats", "records", "diary", "settings"].includes(view)
-          }
-          onClick={() => setMobileMenuOpen((open) => !open)}
-        />
-      </div>
-
-      {mobileMenuOpen && (
-        <dialog open className="mobile-more-backdrop" aria-label="더보기 메뉴">
-          <section className="mobile-more-sheet">
-            <div>
-              <b>더보기</b>
-              <button
-                aria-label="더보기 메뉴 닫기"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <button onClick={() => changeMobileView("records")}>
-              <span>✎</span>
-              <b>하루 기록</b>
-              <small>작은 순간을 자유롭게 기록</small>
-            </button>
-            <button onClick={() => changeMobileView("diary")}>
-              <span>♡</span>
-              <b>감정 일기</b>
-              <small>하루의 감정과 강도 돌아보기</small>
-            </button>
-            <button onClick={() => changeMobileView("stats")}>
-              <span>▥</span>
-              <b>통계</b>
-              <small>일정, 지출, 감정 흐름 확인</small>
-            </button>
-            <button onClick={() => changeMobileView("settings")}>
-              <span>⚙</span>
-              <b>설정</b>
-              <small>계정과 데이터 관리</small>
-            </button>
-          </section>
-        </dialog>
-      )}
+        }}
+        onToggleMore={() => setMobileMenuOpen((open) => !open)}
+      />
 
       {scheduleDraft && (
         <ScheduleModal

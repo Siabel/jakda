@@ -7,6 +7,8 @@ const compact = (source) => source.replace(/\s+/g, "");
 const uiSourcePaths = [
   "app/page.tsx",
   "app/components/auth-gate.tsx",
+  "app/components/app-navigation.tsx",
+  "app/components/app-state.ts",
   "app/components/common.tsx",
   "app/components/day-scheduler.tsx",
   "app/components/views/account-views.tsx",
@@ -216,7 +218,7 @@ test("supports a responsive installable mobile web app", async () => {
   ]);
   assert.match(page, /mobile-more-sheet/);
   assert.match(page, /선택한 날짜에 일정 추가/);
-  assert.match(page, /changeMobileView\("settings"\)/);
+  assert.match(page, /onView\("settings"\)/);
   assert.ok(compact(styles).includes("env(safe-area-inset-bottom)"));
   assert.ok(compact(styles).includes("max-height:92dvh"));
   assert.ok(compact(styles).includes(".weekdays,.calendar-grid{min-width:0"));
@@ -272,15 +274,15 @@ test("provides a production-ready PWA shell and install experience", async () =>
 });
 
 test("keeps mobile pages within the viewport and explains unsupported Android installation", async () => {
-  const [page, styles, theme, manager] = await Promise.all([
-    readFile(new URL("app/page.tsx", root), "utf8"),
+  const [ui, styles, theme, manager] = await Promise.all([
+    readUiSource(),
     readStyleSource(),
     readStyleSource(),
     readFile(new URL("app/components/pwa-manager.tsx", root), "utf8"),
   ]);
 
-  assert.match(page, /className={`content view-\${view}`}/);
-  assert.ok(compact(page).includes('view==="ledger"?"거래추가"'));
+  assert.match(ui, /className={`content view-\${view}`}/);
+  assert.ok(compact(ui).includes('view==="ledger"?"거래추가"'));
   assert.ok(
     compact(styles).includes(
       ".content,.sidebar-collapsed.content{width:100%;min-width:0;max-width:100%;margin-left:0",
@@ -299,16 +301,16 @@ test("keeps mobile pages within the viewport and explains unsupported Android in
   assert.match(manager, /7일 동안 보지 않기/);
 });
 test("provides a separate profile page backed by Supabase user metadata", async () => {
-  const [page, views, types, dataLayer, styles] = await Promise.all([
-    readFile(new URL("app/page.tsx", root), "utf8"),
+  const [ui, views, types, dataLayer, styles] = await Promise.all([
+    readUiSource(),
     readFile(new URL("app/components/views/account-views.tsx", root), "utf8"),
     readFile(new URL("lib/types.ts", root), "utf8"),
     readFile(new URL("lib/app-data.ts", root), "utf8"),
     readStyleSource(),
   ]);
   assert.match(types, /"profile"/);
-  assert.match(page, /프로필 열기/);
-  assert.match(page, /<ProfileView/);
+  assert.match(ui, /프로필 열기/);
+  assert.match(ui, /<ProfileView/);
   assert.match(views, /function ProfileView/);
   assert.match(views, /display_name: displayName/);
   assert.match(views, /real_name: realNameValue/);
@@ -387,4 +389,37 @@ test("retries the transient Supabase JWT clock error before showing a friendly r
   assert.match(dataLayer, /retryDelays = \[800, 1800, 3500, 6500\]/);
   assert.match(page, /dataLoadRevision/);
   assert.match(page, /다시 연결/);
+});
+
+test("keeps the database baseline reproducible and separates page calculations", async () => {
+  const [baseline, schema, readme, page, appState] = await Promise.all([
+    readFile(new URL("supabase/migrations/001_baseline.sql", root), "utf8"),
+    readFile(new URL("supabase/schema.sql", root), "utf8"),
+    readFile(new URL("supabase/README.md", root), "utf8"),
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/app-state.ts", root), "utf8"),
+  ]);
+
+  for (const table of [
+    "schedules",
+    "transactions",
+    "emotion_diaries",
+    "daily_records",
+  ]) {
+    assert.match(
+      baseline,
+      new RegExp(`create table if not exists public\\.${table}`),
+    );
+    assert.match(
+      schema,
+      new RegExp(`create table if not exists public\\.${table}`),
+    );
+  }
+  assert.match(baseline, /enable row level security/i);
+  assert.match(baseline, /delete_my_account/);
+  assert.match(readme, /기존 운영 프로젝트/);
+  assert.match(page, /selectDayData/);
+  assert.match(page, /selectMonthData/);
+  assert.match(appState, /createBlankSchedule/);
+  assert.match(appState, /actualScheduleIds/);
 });

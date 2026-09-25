@@ -59,14 +59,9 @@ NAVER_API_HUB_CLIENT_SECRET=
 
 ## 데이터베이스
 
-Supabase SQL Editor에서 아래 마이그레이션을 순서대로 적용합니다.
+새 Supabase 프로젝트에서는 `supabase/migrations`의 SQL을 번호 순서대로 적용합니다. 현재 기준 파일은 `001_baseline.sql`입니다.
 
-1. `supabase/migrations/001_initial_schema.sql`
-2. `supabase/migrations/002_daily_records_and_schedule_actuals.sql`
-3. `supabase/migrations/003_schedule_place.sql`
-4. `supabase/migrations/004_multiple_emotions.sql`
-5. `supabase/migrations/005_recurring_transactions_and_memos.sql`
-6. `supabase/migrations/006_profiles.sql`
+기존 운영 프로젝트에는 같은 구조가 이미 적용되어 있으므로 기준 파일을 다시 실행하지 않습니다. 이후 기능의 스키마 변경은 `002_*.sql`부터 추가합니다. 자세한 기준은 `supabase/README.md`를 확인하세요.
 
 모든 사용자 데이터 테이블은 Row Level Security 정책으로 소유자별 접근을 제한합니다.
 
@@ -85,6 +80,7 @@ npm test
 운영 배포는 `release` 브랜치를 기준으로 합니다. 기능 개발은 `feat/*`, 오류 수정은 `fix/*` 브랜치에서 진행하고 검증이 끝난 변경만 `release`에 반영합니다. `master`는 운영 배포 트리거로 사용하지 않습니다.
 
 문제 해결 과정과 재발 방지 기준은 [`trouble_shooting.md`](./trouble_shooting.md)에 기록합니다.
+운영 배포 전 직접 점검 항목은 [`docs/manual-smoke-test.md`](./docs/manual-smoke-test.md)를 사용합니다.
 
 ## 프로젝트 구조
 
