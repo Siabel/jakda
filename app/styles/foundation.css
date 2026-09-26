@@ -863,21 +863,6 @@ body:before {
     jakda-step 0.55s 0.24s ease both,
     jakda-beacon 4.8s 1.2s ease-in-out infinite;
 }
-.brand-logo:hover .brand-step,
-.brand:focus-visible .brand-step,
-.mobile-brand:focus-visible .brand-step {
-  animation: jakda-step-hop 0.58s ease both;
-}
-.brand-logo:hover .brand-step-two,
-.brand:focus-visible .brand-step-two,
-.mobile-brand:focus-visible .brand-step-two {
-  animation-delay: 0.08s;
-}
-.brand-logo:hover .brand-step-three,
-.brand:focus-visible .brand-step-three,
-.mobile-brand:focus-visible .brand-step-three {
-  animation-delay: 0.16s;
-}
 .brand-copy {
   display: flex !important;
   flex-direction: column;
@@ -963,16 +948,6 @@ body:before {
     filter: drop-shadow(0 0 4px rgba(232, 121, 50, 0.5));
   }
 }
-@keyframes jakda-step-hop {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-4px) scale(1.08);
-  }
-}
-
 .sidebar {
   color: var(--ink);
   border-right: 1px solid var(--line);
