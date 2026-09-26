@@ -24,6 +24,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .brand-symbol-wrap,
+  .brand-symbol,
   .brand-frame,
   .brand-step,
   .brand-copy {

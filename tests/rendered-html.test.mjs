@@ -60,7 +60,8 @@ test("uses the Jakda brand across UI, metadata, and PWA assets", async () => {
   assert.match(theme, /\.auth-story \.brand-copy em/);
   assert.match(theme, /color: #ffd19f/);
   assert.match(ui, /brand-symbol-wrap/);
-  assert.match(theme, /jakda-breathe/);
+  assert.match(theme, /jakda-color-pulse/);
+  assert.doesNotMatch(theme, /jakda-breathe/);
   assert.doesNotMatch(theme, /jakda-beacon/);
   assert.doesNotMatch(theme, /jakda-step-hop/);
   assert.match(theme, /prefers-reduced-motion: reduce/);
