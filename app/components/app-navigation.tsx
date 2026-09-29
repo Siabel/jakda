@@ -122,7 +122,7 @@ export function MobileNavigation({
         ? "하루 기록 추가"
         : view === "todo"
           ? "할 일 추가"
-        : "선택한 날짜에 일정 추가";
+          : "선택한 날짜에 일정 추가";
 
   return (
     <>

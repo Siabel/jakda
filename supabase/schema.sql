@@ -73,21 +73,37 @@ create table if not exists public.daily_records (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.todos (
+  id text primary key default gen_random_uuid()::text,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  schedule_id text references public.schedules(id) on delete set null,
+  title text not null check (char_length(trim(title)) between 1 and 120),
+  memo text not null default '',
+  priority text not null default 'normal' check (priority in ('high','normal','low')),
+  status text not null default 'open' check (status in ('open','scheduled','done')),
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists schedules_user_date_idx on public.schedules(user_id, date);
 create index if not exists transactions_user_date_idx on public.transactions(user_id, date);
 create unique index if not exists transactions_one_schedule_actual_idx on public.transactions(schedule_id) where source = 'schedule_actual' and schedule_id is not null;
 create index if not exists emotion_diaries_user_date_idx on public.emotion_diaries(user_id, date);
 create index if not exists daily_records_user_date_idx on public.daily_records(user_id, date);
+create index if not exists todos_user_status_created_idx on public.todos(user_id, status, created_at desc);
+create unique index if not exists todos_one_schedule_idx on public.todos(schedule_id) where schedule_id is not null;
 
 alter table public.schedules enable row level security;
 alter table public.transactions enable row level security;
 alter table public.emotion_diaries enable row level security;
 alter table public.daily_records enable row level security;
+alter table public.todos enable row level security;
 
 do $$
 declare table_name text;
 begin
-  foreach table_name in array array['schedules','transactions','emotion_diaries','daily_records'] loop
+  foreach table_name in array array['schedules','transactions','emotion_diaries','daily_records','todos'] loop
     execute format('drop policy if exists "owners manage own rows" on public.%I', table_name);
     execute format(
       'create policy "owners manage own rows" on public.%I for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id)',

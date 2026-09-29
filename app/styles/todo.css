@@ -1,18 +1,26 @@
-/* Local-only to-do concept. It can be removed without affecting persisted data. */
-.preview-badge {
-  display: inline-flex;
+/* To-do inbox and schedule handoff */
+.todo-setup-alert {
+  display: flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 13px 16px;
   border: 1px solid #e4cda9;
-  border-radius: 999px;
-  color: #7b6136;
+  border-radius: 13px;
+  color: #6f5732;
   background: #fff8eb;
   font-size: 10px;
+}
+
+.todo-setup-alert b {
+  flex: 0 0 auto;
+}
+
+.todo-setup-alert code {
   font-weight: 800;
 }
 
-.todo-preview-guide {
+.todo-guide {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -22,11 +30,15 @@
   border: 1px solid #dce6e1;
   border-radius: 22px 22px 22px 8px;
   background:
-    radial-gradient(circle at 92% 12%, rgba(232, 121, 50, 0.12), transparent 26%),
+    radial-gradient(
+      circle at 92% 12%,
+      rgba(232, 121, 50, 0.12),
+      transparent 26%
+    ),
     linear-gradient(135deg, #f4f8f6, #fffaf3);
 }
 
-.todo-preview-guide small,
+.todo-guide small,
 .todo-card-heading small {
   color: var(--orange);
   font-size: 8px;
@@ -34,19 +46,19 @@
   letter-spacing: 0.16em;
 }
 
-.todo-preview-guide h2 {
+.todo-guide h2 {
   margin: 6px 0 7px;
   color: var(--ink);
   font: 600 21px var(--serif);
 }
 
-.todo-preview-guide p {
+.todo-guide p {
   margin: 0;
   color: var(--muted);
   font-size: 11px;
 }
 
-.todo-preview-flow {
+.todo-flow {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -57,7 +69,7 @@
   background: rgba(255, 255, 255, 0.75);
 }
 
-.todo-preview-flow span {
+.todo-flow span {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -67,7 +79,7 @@
   white-space: nowrap;
 }
 
-.todo-preview-flow b {
+.todo-flow b {
   width: 21px;
   height: 21px;
   display: grid;
@@ -78,12 +90,12 @@
   font-size: 8px;
 }
 
-.todo-preview-flow i {
+.todo-flow i {
   color: #b5bdb9;
   font-style: normal;
 }
 
-.todo-preview-layout {
+.todo-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(310px, 0.82fr);
   gap: 20px;
@@ -91,7 +103,7 @@
 }
 
 .todo-inbox-card,
-.todo-schedule-preview {
+.todo-schedule-panel {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -100,11 +112,16 @@
   box-shadow: var(--shadow);
 }
 
+.todo-schedule-panel.dragging {
+  outline: 3px solid rgba(64, 105, 91, 0.18);
+  outline-offset: 3px;
+}
+
 .todo-inbox-card {
   padding-bottom: 14px;
 }
 
-.todo-schedule-preview {
+.todo-schedule-panel {
   position: sticky;
   top: 24px;
   padding-bottom: 20px;
@@ -209,13 +226,13 @@
   background: #eaf2ef;
 }
 
-.todo-preview-list {
+.todo-list {
   display: grid;
   gap: 8px;
   padding: 0 18px;
 }
 
-.todo-preview-item {
+.todo-item {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
@@ -227,19 +244,19 @@
   transition: 0.18s ease;
 }
 
-.todo-preview-item:hover,
-.todo-preview-item.selected {
+.todo-item:hover,
+.todo-item.selected {
   border-color: #aac5bb;
   box-shadow: 0 8px 20px rgba(45, 62, 56, 0.08);
   transform: translateY(-1px);
 }
 
-.todo-preview-item.scheduled {
+.todo-item.scheduled {
   border-color: #d6d9e8;
   background: #fafaff;
 }
 
-.todo-preview-item.done {
+.todo-item.done {
   opacity: 0.68;
 }
 
@@ -255,7 +272,7 @@
   cursor: pointer;
 }
 
-.todo-preview-item.done .todo-check {
+.todo-item.done .todo-check {
   border-color: var(--green);
   background: var(--green);
 }
@@ -305,7 +322,7 @@
   font-size: 9px;
 }
 
-.todo-preview-item.done .todo-copy b {
+.todo-item.done .todo-copy b {
   text-decoration: line-through;
 }
 
@@ -321,7 +338,7 @@
   cursor: pointer;
 }
 
-.todo-selected-preview {
+.todo-editor {
   margin: 18px 18px 14px;
   padding: 16px;
   border: 1px solid #d9e5e0;
@@ -329,27 +346,71 @@
   background: linear-gradient(135deg, #edf5f2, #f8fbfa);
 }
 
-.todo-selected-preview > span,
-.todo-selected-preview > b,
-.todo-selected-preview > small {
-  display: block;
+.todo-editor label {
+  display: grid;
+  gap: 6px;
+  margin-top: 11px;
 }
 
-.todo-selected-preview > span {
-  margin-bottom: 7px;
+.todo-editor label:first-child {
+  margin-top: 0;
+}
+
+.todo-editor label > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.todo-editor input,
+.todo-editor textarea,
+.todo-editor select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 10px;
+}
+
+.todo-editor textarea {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.todo-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.todo-linked-schedule {
+  display: grid;
+  gap: 7px;
+  margin: 0 18px;
+  padding: 15px;
+  border: 1px solid #d6d9e8;
+  border-radius: 14px;
+  background: #fafaff;
+}
+
+.todo-linked-schedule span,
+.todo-linked-schedule small {
   color: var(--muted);
   font-size: 8px;
 }
 
-.todo-selected-preview > b {
+.todo-linked-schedule b {
   color: var(--ink);
-  font: 600 16px var(--serif);
+  font-size: 12px;
 }
 
-.todo-selected-preview > small {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 9px;
+.todo-linked-schedule button {
+  margin-top: 5px;
 }
 
 .todo-schedule-fields {
@@ -379,7 +440,7 @@
   font-size: 10px;
 }
 
-.todo-calendar-preview {
+.todo-calendar-card {
   margin: 16px 18px 14px;
   padding: 14px;
   border: 1px dashed #b9c9c3;
@@ -387,14 +448,14 @@
   background: #fbfcfa;
 }
 
-.todo-calendar-preview > small {
+.todo-calendar-card > small {
   display: block;
   margin-bottom: 10px;
   color: var(--muted);
   font-size: 8px;
 }
 
-.todo-calendar-preview > div {
+.todo-calendar-card > div {
   display: grid;
   grid-template-columns: 52px 1fr;
   gap: 10px;
@@ -405,23 +466,23 @@
   background: #fff3e9;
 }
 
-.todo-calendar-preview time {
+.todo-calendar-card time {
   color: #9d5937;
   font-size: 10px;
   font-weight: 800;
 }
 
-.todo-calendar-preview span b,
-.todo-calendar-preview span small {
+.todo-calendar-card span b,
+.todo-calendar-card span small {
   display: block;
 }
 
-.todo-calendar-preview span b {
+.todo-calendar-card span b {
   color: var(--ink);
   font-size: 10px;
 }
 
-.todo-calendar-preview span small {
+.todo-calendar-card span small {
   margin-top: 3px;
   color: var(--muted);
   font-size: 8px;
@@ -432,7 +493,7 @@
   margin: 0 18px;
 }
 
-.todo-preview-note {
+.todo-note {
   margin: 12px 22px 0;
   color: var(--muted);
   font-size: 8px;
@@ -440,7 +501,7 @@
   text-align: center;
 }
 
-.todo-preview-empty {
+.todo-empty {
   min-height: 140px;
   display: grid;
   place-items: center;
@@ -450,11 +511,11 @@
   text-align: center;
 }
 
-.todo-preview-empty.large {
+.todo-empty.large {
   min-height: 320px;
 }
 
-.todo-preview-empty > span {
+.todo-empty > span {
   width: 38px;
   height: 38px;
   display: grid;
@@ -465,16 +526,16 @@
 }
 
 @media (max-width: 980px) {
-  .todo-preview-guide {
+  .todo-guide {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .todo-preview-layout {
+  .todo-layout {
     grid-template-columns: 1fr;
   }
 
-  .todo-schedule-preview {
+  .todo-schedule-panel {
     position: static;
   }
 }
@@ -484,16 +545,21 @@
     align-items: flex-start;
   }
 
-  .todo-preview-guide {
+  .todo-guide {
     gap: 18px;
     padding: 18px;
   }
 
-  .todo-preview-guide h2 {
+  .todo-setup-alert {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .todo-guide h2 {
     font-size: 18px;
   }
 
-  .todo-preview-flow {
+  .todo-flow {
     width: 100%;
     justify-content: space-between;
     overflow-x: auto;
@@ -514,12 +580,12 @@
   }
 
   .todo-filters,
-  .todo-preview-list {
+  .todo-list {
     padding-right: 14px;
     padding-left: 14px;
   }
 
-  .todo-preview-item {
+  .todo-item {
     grid-template-columns: 30px minmax(0, 1fr);
   }
 
@@ -533,8 +599,8 @@
     padding: 0 14px;
   }
 
-  .todo-selected-preview,
-  .todo-calendar-preview {
+  .todo-editor,
+  .todo-calendar-card {
     margin-right: 14px;
     margin-left: 14px;
   }

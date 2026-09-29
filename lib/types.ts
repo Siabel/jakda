@@ -12,6 +12,8 @@ export type ScheduleStatus = "planned" | "done" | "partial" | "cancelled";
 export type TransactionType = "income" | "expense";
 export type RepeatFrequency = "yearly" | "monthly" | "weekly" | "daily";
 export type TransactionSource = "manual" | "schedule_actual";
+export type TodoStatus = "open" | "scheduled" | "done";
+export type TodoPriority = "high" | "normal" | "low";
 
 export type AppUser = {
   id: string;
@@ -88,22 +90,39 @@ export type DailyRecord = {
   scheduleId?: string;
 };
 
+export type Todo = {
+  id: string;
+  userId: string;
+  title: string;
+  memo: string;
+  priority: TodoPriority;
+  status: TodoStatus;
+  scheduleId?: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AppData = {
-  version: 2;
+  version: 3;
   user: AppUser;
   schedules: Schedule[];
   transactions: Transaction[];
   diaries: EmotionDiary[];
   dailyRecords: DailyRecord[];
+  todos: Todo[];
+  todoStorageReady: boolean;
 };
 
 export function emptyAppData(user: AppUser): AppData {
   return {
-    version: 2,
+    version: 3,
     user,
     schedules: [],
     transactions: [],
     diaries: [],
     dailyRecords: [],
+    todos: [],
+    todoStorageReady: true,
   };
 }

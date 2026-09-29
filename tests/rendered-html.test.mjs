@@ -430,24 +430,31 @@ test("keeps the database baseline reproducible and separates page calculations",
   assert.match(appState, /actualScheduleIds/);
 });
 
-test("provides a database-free todo inbox and schedule preview", async () => {
-  const [page, navigation, todoView, types, styles] = await Promise.all([
-    readFile(new URL("app/page.tsx", root), "utf8"),
-    readFile(new URL("app/components/app-navigation.tsx", root), "utf8"),
-    readFile(
-      new URL("app/components/views/todo-preview-view.tsx", root),
-      "utf8",
-    ),
-    readFile(new URL("lib/types.ts", root), "utf8"),
-    readFile(new URL("app/styles/todo-preview.css", root), "utf8"),
-  ]);
+test("provides a persisted todo inbox with schedule handoff", async () => {
+  const [page, navigation, todoView, appData, types, styles, migration] =
+    await Promise.all([
+      readFile(new URL("app/page.tsx", root), "utf8"),
+      readFile(new URL("app/components/app-navigation.tsx", root), "utf8"),
+      readFile(new URL("app/components/views/todo-view.tsx", root), "utf8"),
+      readFile(new URL("lib/app-data.ts", root), "utf8"),
+      readFile(new URL("lib/types.ts", root), "utf8"),
+      readFile(new URL("app/styles/todo.css", root), "utf8"),
+      readFile(new URL("supabase/migrations/002_add_todos.sql", root), "utf8"),
+    ]);
 
   assert.match(types, /| "todo"/);
-  assert.match(page, /TodoPreviewView/);
+  assert.match(types, /export type Todo =/);
+  assert.match(page, /TodoView/);
+  assert.match(page, /scheduleTodo/);
   assert.match(navigation, /label="할 일"/);
-  assert.match(todoView, /화면 시안 · 저장 안 됨/);
   assert.match(todoView, /이 시간에 일정으로 담기/);
-  assert.match(todoView, /initialTodos/);
-  assert.doesNotMatch(todoView, /upsertTodo|supabase/);
-  assert.match(styles, /.todo-preview-layout/);
+  assert.match(todoView, /onCreate/);
+  assert.match(todoView, /onDelete/);
+  assert.doesNotMatch(todoView, /initialTodos|화면 시안/);
+  assert.match(appData, /upsertTodo/);
+  assert.match(appData, /removeTodo/);
+  assert.match(styles, /.todo-layout/);
+  assert.match(migration, /create table if not exists public\.todos/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /auth\.uid\(\) = user_id/);
 });

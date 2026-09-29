@@ -6,10 +6,12 @@ import {
   loadAppData,
   removeDailyRecord,
   removeSchedule,
+  removeTodo,
   removeTransaction,
   upsertDailyRecord,
   upsertDiary,
   upsertSchedule,
+  upsertTodo,
   upsertTransaction,
 } from "../lib/app-data";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
@@ -20,6 +22,7 @@ import type {
   EmotionDiary,
   Schedule,
   ScheduleStatus,
+  Todo,
   Transaction,
   View,
 } from "../lib/types";
@@ -49,10 +52,20 @@ import {
   RecordsView,
   SettingsView,
   StatsView,
-  TodoPreviewView,
+  TodoView,
   TodayView,
 } from "./components/views";
 import { dateKey, newId } from "./components/ui-helpers";
+
+function oneHourAfter(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  const total = Math.min(hour * 60 + minute + 60, 23 * 60 + 50);
+  const nextHour = Math.floor(total / 60)
+    .toString()
+    .padStart(2, "0");
+  const nextMinute = (total % 60).toString().padStart(2, "0");
+  return `${nextHour}:${nextMinute}`;
+}
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -152,6 +165,93 @@ export default function Home() {
   const changeMobileView = (nextView: View) => {
     setView(nextView);
     setMobileMenuOpen(false);
+  };
+
+  const createTodo = async (title: string) => {
+    if (!data || !data.todoStorageReady)
+      throw new Error("할 일 데이터베이스 설정이 필요해요");
+    const now = new Date().toISOString();
+    const item: Todo = {
+      id: newId(),
+      userId: data.user.id,
+      title,
+      memo: "",
+      priority: "normal",
+      status: "open",
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await upsertTodo(item);
+    setData((prev) => prev && { ...prev, todos: [item, ...prev.todos] });
+    setToast("할 일을 보관함에 담았어요");
+    return item;
+  };
+
+  const updateTodo = async (item: Todo) => {
+    await upsertTodo(item);
+    setData(
+      (prev) =>
+        prev && {
+          ...prev,
+          todos: prev.todos.map((todo) => (todo.id === item.id ? item : todo)),
+        },
+    );
+    setToast(
+      item.status === "done" ? "할 일을 완료했어요" : "할 일을 저장했어요",
+    );
+  };
+
+  const deleteTodo = async (item: Todo) => {
+    await removeTodo(item.id);
+    setData(
+      (prev) =>
+        prev && {
+          ...prev,
+          todos: prev.todos.filter((todo) => todo.id !== item.id),
+        },
+    );
+    setToast("할 일을 삭제했어요. 연결된 일정은 유지돼요");
+  };
+
+  const scheduleTodo = async (todo: Todo, date: string, startTime: string) => {
+    if (!data) return;
+    if (oneHourAfter(startTime) <= startTime)
+      throw new Error("일정 시작 시간은 오후 10시 50분 이전으로 선택해 주세요");
+    const schedule: Schedule = {
+      ...createBlankSchedule(date, data.user.id),
+      id: newId(),
+      title: todo.title,
+      memo: todo.memo,
+      startTime,
+      endTime: oneHourAfter(startTime),
+    };
+    const updatedTodo: Todo = {
+      ...todo,
+      status: "scheduled",
+      scheduleId: schedule.id,
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertSchedule(schedule);
+    try {
+      await upsertTodo(updatedTodo);
+    } catch (error) {
+      await removeSchedule(schedule.id);
+      throw error;
+    }
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            schedules: [...prev.schedules, schedule],
+            todos: prev.todos.map((item) =>
+              item.id === updatedTodo.id ? updatedTodo : item,
+            ),
+          }
+        : prev,
+    );
+    changeDate(date);
+    setToast("할 일을 일정으로 옮겼어요");
   };
 
   const saveSchedule = async (event: FormEvent) => {
@@ -288,7 +388,22 @@ export default function Home() {
               completedAt: new Date().toISOString(),
             }
           : item;
-      await upsertSchedule(completedItem);
+      const linkedTodo = data.todos.find(
+        (todo) => todo.scheduleId === completedItem.id,
+      );
+      const completedTodo =
+        completedItem.status === "done" && linkedTodo
+          ? {
+              ...linkedTodo,
+              status: "done" as const,
+              completedAt: completedItem.completedAt,
+              updatedAt: new Date().toISOString(),
+            }
+          : undefined;
+      await Promise.all([
+        upsertSchedule(completedItem),
+        completedTodo ? upsertTodo(completedTodo) : Promise.resolve(),
+      ]);
       setData(
         (prev) =>
           prev && {
@@ -298,6 +413,11 @@ export default function Home() {
                   s.id === completedItem.id ? completedItem : s,
                 )
               : [...prev.schedules, completedItem],
+            todos: completedTodo
+              ? prev.todos.map((todo) =>
+                  todo.id === completedTodo.id ? completedTodo : todo,
+                )
+              : prev.todos,
           },
       );
       setScheduleDraft(null);
@@ -319,6 +439,16 @@ export default function Home() {
   const deleteSchedule = async (id: string) => {
     try {
       await removeSchedule(id);
+      const unlinkedTodos = (data?.todos ?? [])
+        .filter((todo) => todo.scheduleId === id)
+        .map((todo) => ({
+          ...todo,
+          status: "open" as const,
+          scheduleId: undefined,
+          updatedAt: new Date().toISOString(),
+        }));
+      await Promise.all(unlinkedTodos.map(upsertTodo));
+      const unlinkedMap = new Map(unlinkedTodos.map((todo) => [todo.id, todo]));
       setData(
         (prev) =>
           prev && {
@@ -330,6 +460,7 @@ export default function Home() {
             dailyRecords: prev.dailyRecords.map((r) =>
               r.scheduleId === id ? { ...r, scheduleId: undefined } : r,
             ),
+            todos: prev.todos.map((todo) => unlinkedMap.get(todo.id) ?? todo),
           },
       );
       setMenuId(null);
@@ -355,12 +486,32 @@ export default function Home() {
     }
     try {
       const item = { ...schedule, status };
-      await upsertSchedule(item);
+      const linkedTodo = data?.todos.find(
+        (todo) => todo.scheduleId === schedule.id,
+      );
+      const todoUpdate =
+        status === "cancelled" && linkedTodo
+          ? {
+              ...linkedTodo,
+              status: "open" as const,
+              scheduleId: undefined,
+              updatedAt: new Date().toISOString(),
+            }
+          : undefined;
+      await Promise.all([
+        upsertSchedule(item),
+        todoUpdate ? upsertTodo(todoUpdate) : Promise.resolve(),
+      ]);
       setData(
         (prev) =>
           prev && {
             ...prev,
             schedules: prev.schedules.map((s) => (s.id === item.id ? item : s)),
+            todos: todoUpdate
+              ? prev.todos.map((todo) =>
+                  todo.id === todoUpdate.id ? todoUpdate : todo,
+                )
+              : prev.todos,
           },
       );
       setMenuId(null);
@@ -395,6 +546,17 @@ export default function Home() {
             completedAt: new Date().toISOString(),
           }
         : undefined;
+    const linkedTodo = scheduleUpdate
+      ? data.todos.find((todo) => todo.scheduleId === scheduleUpdate.id)
+      : undefined;
+    const completedTodo = linkedTodo
+      ? {
+          ...linkedTodo,
+          status: "done" as const,
+          completedAt: scheduleUpdate?.completedAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      : undefined;
     try {
       if (txDraft.id && editTransactionSeries && item.seriesId) {
         const occurrences = data.transactions
@@ -471,6 +633,7 @@ export default function Home() {
       await Promise.all([
         upsertTransaction(item),
         scheduleUpdate ? upsertSchedule(scheduleUpdate) : Promise.resolve(),
+        completedTodo ? upsertTodo(completedTodo) : Promise.resolve(),
       ]);
       setData(
         (prev) =>
@@ -488,6 +651,11 @@ export default function Home() {
                   transaction.id === item.id ? item : transaction,
                 )
               : [...prev.transactions, item],
+            todos: completedTodo
+              ? prev.todos.map((todo) =>
+                  todo.id === completedTodo.id ? completedTodo : todo,
+                )
+              : prev.todos,
           },
       );
       setTxDraft(null);
@@ -698,7 +866,22 @@ export default function Home() {
             onDelete={deleteSchedule}
           />
         )}
-        {view === "todo" && <TodoPreviewView onToast={setToast} />}
+        {view === "todo" && (
+          <TodoView
+            todos={data.todos}
+            schedules={data.schedules}
+            storageReady={data.todoStorageReady}
+            onCreate={createTodo}
+            onUpdate={updateTodo}
+            onDelete={deleteTodo}
+            onSchedule={scheduleTodo}
+            onOpenSchedule={(schedule) => {
+              changeDate(schedule.date);
+              setScheduleDraft(schedule);
+            }}
+            onToast={setToast}
+          />
+        )}
         {view === "ledger" && (
           <LedgerView
             cursor={monthCursor}

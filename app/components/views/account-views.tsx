@@ -7,6 +7,7 @@ import {
   upsertDailyRecord,
   upsertDiary,
   upsertSchedule,
+  upsertTodo,
   upsertTransaction,
 } from "../../../lib/app-data";
 import { getSupabase } from "../../../lib/supabase";
@@ -104,6 +105,9 @@ export function ProfileView({
             <span>
               <b>{data.dailyRecords.length}</b>하루 기록
             </span>
+            <span>
+              <b>{data.todos.length}</b>할 일
+            </span>
           </div>
         </section>
         <div className="profile-details">
@@ -199,20 +203,25 @@ export function SettingsView({
     URL.revokeObjectURL(anchor.href);
   };
   const importData = async (source: Partial<AppData>) => {
-    const schedules = (source.schedules ?? []).map((s) => ({
-      ...s,
-      id: newId(),
-      userId: data.user.id,
-      address: s.address ?? "",
-      actualDate: s.actualDate ?? "",
-      actualStartTime: s.actualStartTime ?? "",
-      actualEndTime: s.actualEndTime ?? "",
-      completedAt: s.completedAt ?? null,
-      isRecurring: s.isRecurring ?? false,
-      repeatFrequency: s.repeatFrequency ?? null,
-      repeatEndDate: s.repeatEndDate ?? null,
-      seriesId: null,
-    }));
+    const scheduleIds = new Map<string, string>();
+    const schedules = (source.schedules ?? []).map((s) => {
+      const id = newId();
+      scheduleIds.set(s.id, id);
+      return {
+        ...s,
+        id,
+        userId: data.user.id,
+        address: s.address ?? "",
+        actualDate: s.actualDate ?? "",
+        actualStartTime: s.actualStartTime ?? "",
+        actualEndTime: s.actualEndTime ?? "",
+        completedAt: s.completedAt ?? null,
+        isRecurring: s.isRecurring ?? false,
+        repeatFrequency: s.repeatFrequency ?? null,
+        repeatEndDate: s.repeatEndDate ?? null,
+        seriesId: null,
+      };
+    });
     const transactions = (source.transactions ?? []).map((t) => ({
       ...t,
       id: newId(),
@@ -251,11 +260,37 @@ export function SettingsView({
       userId: data.user.id,
       scheduleId: undefined,
     }));
+    const now = new Date().toISOString();
+    const todos = (source.todos ?? []).map((todo) => {
+      const scheduleId = todo.scheduleId
+        ? scheduleIds.get(todo.scheduleId)
+        : undefined;
+      return {
+        ...todo,
+        id: newId(),
+        userId: data.user.id,
+        memo: todo.memo ?? "",
+        priority: todo.priority ?? "normal",
+        status:
+          todo.status === "scheduled" && !scheduleId
+            ? ("open" as const)
+            : todo.status,
+        scheduleId,
+        completedAt: todo.completedAt ?? null,
+        createdAt: todo.createdAt ?? now,
+        updatedAt: now,
+      };
+    });
+    if (todos.length && !data.todoStorageReady)
+      throw new Error(
+        "할 일 백업을 복원하려면 002_add_todos.sql을 먼저 적용해 주세요",
+      );
     await Promise.all([
       ...schedules.map(upsertSchedule),
       ...transactions.map(upsertTransaction),
       ...diaries.map(upsertDiary),
       ...records.map(upsertDailyRecord),
+      ...todos.map(upsertTodo),
     ]);
     const refreshed = await loadAppData(
       (await getSupabase()!.auth.getUser()).data.user!,
@@ -339,7 +374,7 @@ export function SettingsView({
           <div>
             <h2>데이터 백업</h2>
             <p>
-              현재 계정의 일정, 거래, 감정 일기, 하루 기록을 JSON 파일로
+              현재 계정의 일정, 거래, 감정 일기, 하루 기록과 할 일을 JSON 파일로
               내려받습니다.
             </p>
             <button className="primary" onClick={download}>
@@ -446,6 +481,9 @@ export function SettingsView({
               <span>
                 하루 기록 <b>{data.dailyRecords.length}</b>
               </span>
+              <span>
+                할 일 <b>{data.todos.length}</b>
+              </span>
             </div>
             <div className="session-actions">
               <button className="ghost" onClick={signOutOthers}>
@@ -465,8 +503,8 @@ export function SettingsView({
           <div>
             <h2>계정 삭제</h2>
             <p>
-              계정과 일정, 거래, 감정 일기, 하루 기록을 모두 영구 삭제합니다.
-              실행 전 <b>계정 삭제</b>를 입력해 주세요.
+              계정과 일정, 거래, 감정 일기, 하루 기록, 할 일을 모두 영구
+              삭제합니다. 실행 전 <b>계정 삭제</b>를 입력해 주세요.
             </p>
             <div className="delete-account">
               <input

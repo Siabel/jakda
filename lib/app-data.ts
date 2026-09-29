@@ -6,6 +6,7 @@ import {
   EmotionDiary,
   EmotionEntry,
   Schedule,
+  Todo,
   Transaction,
   emptyAppData,
 } from "./types";
@@ -25,6 +26,15 @@ const jwtFutureError = (error: { code?: string; message?: string } | null) =>
     error &&
     (error.code === "PGRST303" ||
       /jwt issued at future/i.test(error.message ?? "")),
+  );
+
+const missingTodoTable = (error: { code?: string; message?: string } | null) =>
+  Boolean(
+    error &&
+    (error.code === "PGRST205" ||
+      error.code === "42P01" ||
+      /could not find the table.*todos/i.test(error.message ?? "") ||
+      /relation.*todos.*does not exist/i.test(error.message ?? "")),
   );
 
 const wait = (milliseconds: number) =>
@@ -68,6 +78,10 @@ export async function loadAppData(user: User): Promise<AppData> {
         .select("*")
         .order("date", { ascending: false })
         .order("record_time", { ascending: false }),
+      client
+        .from("todos")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
   const retryDelays = [800, 1800, 3500, 6500];
   let result = await loadTables();
@@ -76,7 +90,7 @@ export async function loadAppData(user: User): Promise<AppData> {
     await wait(delay);
     result = await loadTables();
   }
-  const [schedules, transactions, diaries, records] = result;
+  const [schedules, transactions, diaries, records, todos] = result;
   if (result.some(({ error }) => jwtFutureError(error))) {
     throw new Error(
       "로그인 정보의 시간 동기화가 지연되고 있어요. 잠시 후 다시 연결해 주세요.",
@@ -85,6 +99,7 @@ export async function loadAppData(user: User): Promise<AppData> {
   [schedules, transactions, diaries, records].forEach(({ error }) =>
     throwIfError(error),
   );
+  if (todos.error && !missingTodoTable(todos.error)) throwIfError(todos.error);
 
   const data = emptyAppData({
     id: user.id,
@@ -152,6 +167,19 @@ export async function loadAppData(user: User): Promise<AppData> {
     title: r.title,
     content: r.content,
     scheduleId: r.schedule_id ?? undefined,
+  }));
+  data.todoStorageReady = !missingTodoTable(todos.error);
+  data.todos = (todos.data ?? []).map((r) => ({
+    id: r.id,
+    userId: r.user_id,
+    title: r.title,
+    memo: r.memo ?? "",
+    priority: r.priority ?? "normal",
+    status: r.status === "scheduled" && !r.schedule_id ? "open" : r.status,
+    scheduleId: r.schedule_id ?? undefined,
+    completedAt: r.completed_at ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }));
   return data;
 }
@@ -258,6 +286,29 @@ export async function upsertDailyRecord(item: DailyRecord) {
 
 export async function removeDailyRecord(id: string) {
   const { error } = await db().from("daily_records").delete().eq("id", id);
+  throwIfError(error);
+}
+
+export async function upsertTodo(item: Todo) {
+  const { error } = await db()
+    .from("todos")
+    .upsert({
+      id: item.id,
+      user_id: item.userId,
+      title: item.title,
+      memo: item.memo,
+      priority: item.priority,
+      status: item.status,
+      schedule_id: item.scheduleId ?? null,
+      completed_at: item.completedAt,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
+    });
+  throwIfError(error);
+}
+
+export async function removeTodo(id: string) {
+  const { error } = await db().from("todos").delete().eq("id", id);
   throwIfError(error);
 }
 
