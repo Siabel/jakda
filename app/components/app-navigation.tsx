@@ -43,6 +43,12 @@ export function DesktopNavigation({
           onClick={onToday}
         />
         <NavButton
+          icon="✓"
+          label="할 일"
+          active={view === "todo"}
+          onClick={() => onView("todo")}
+        />
+        <NavButton
           icon="□"
           label="캘린더"
           active={view === "calendar"}
@@ -114,6 +120,8 @@ export function MobileNavigation({
       ? "거래 추가"
       : view === "records"
         ? "하루 기록 추가"
+        : view === "todo"
+          ? "할 일 추가"
         : "선택한 날짜에 일정 추가";
 
   return (
@@ -167,7 +175,8 @@ export function MobileNavigation({
           icon="•••"
           label="더보기"
           active={
-            moreOpen || ["stats", "records", "diary", "settings"].includes(view)
+            moreOpen ||
+            ["todo", "stats", "records", "diary", "settings"].includes(view)
           }
           onClick={onToggleMore}
         />
@@ -189,6 +198,11 @@ export function MobileNavigation({
               <span>✎</span>
               <b>하루 기록</b>
               <small>작은 순간을 자유롭게 기록</small>
+            </button>
+            <button type="button" onClick={() => onView("todo")}>
+              <span>✓</span>
+              <b>할 일</b>
+              <small>날짜 없는 일을 모아 일정으로 옮기기</small>
             </button>
             <button type="button" onClick={() => onView("diary")}>
               <span>♡</span>

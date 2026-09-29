@@ -49,6 +49,7 @@ import {
   RecordsView,
   SettingsView,
   StatsView,
+  TodoPreviewView,
   TodayView,
 } from "./components/views";
 import { dateKey, newId } from "./components/ui-helpers";
@@ -697,6 +698,7 @@ export default function Home() {
             onDelete={deleteSchedule}
           />
         )}
+        {view === "todo" && <TodoPreviewView onToast={setToast} />}
         {view === "ledger" && (
           <LedgerView
             cursor={monthCursor}
@@ -784,6 +786,8 @@ export default function Home() {
             setTxDraft(createBlankTransaction(selectedDate, data.user.id));
           } else if (view === "records") {
             setRecordDraft(createBlankRecord(selectedDate, data.user.id));
+          } else if (view === "todo") {
+            setToast("할 일 화면의 입력창에서 시안을 체험해 보세요");
           } else {
             setScheduleDraft(createBlankSchedule(selectedDate, data.user.id));
           }

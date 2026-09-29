@@ -429,3 +429,25 @@ test("keeps the database baseline reproducible and separates page calculations",
   assert.match(appState, /createBlankSchedule/);
   assert.match(appState, /actualScheduleIds/);
 });
+
+test("provides a database-free todo inbox and schedule preview", async () => {
+  const [page, navigation, todoView, types, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/app-navigation.tsx", root), "utf8"),
+    readFile(
+      new URL("app/components/views/todo-preview-view.tsx", root),
+      "utf8",
+    ),
+    readFile(new URL("lib/types.ts", root), "utf8"),
+    readFile(new URL("app/styles/todo-preview.css", root), "utf8"),
+  ]);
+
+  assert.match(types, /| "todo"/);
+  assert.match(page, /TodoPreviewView/);
+  assert.match(navigation, /label="할 일"/);
+  assert.match(todoView, /화면 시안 · 저장 안 됨/);
+  assert.match(todoView, /이 시간에 일정으로 담기/);
+  assert.match(todoView, /initialTodos/);
+  assert.doesNotMatch(todoView, /upsertTodo|supabase/);
+  assert.match(styles, /.todo-preview-layout/);
+});

@@ -1,5 +1,6 @@
 export type View =
   | "today"
+  | "todo"
   | "calendar"
   | "ledger"
   | "stats"
