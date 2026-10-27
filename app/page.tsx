@@ -1,12 +1,18 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   loadAppData,
   removeDailyRecord,
   removeSchedule,
-  removeTodo,
   removeTransaction,
   upsertDailyRecord,
   upsertDiary,
@@ -22,7 +28,6 @@ import type {
   EmotionDiary,
   Schedule,
   ScheduleStatus,
-  Todo,
   Transaction,
   View,
 } from "../lib/types";
@@ -56,16 +61,12 @@ import {
   TodayView,
 } from "./components/views";
 import { dateKey, newId } from "./components/ui-helpers";
-
-function oneHourAfter(time: string) {
-  const [hour, minute] = time.split(":").map(Number);
-  const total = Math.min(hour * 60 + minute + 60, 23 * 60 + 50);
-  const nextHour = Math.floor(total / 60)
-    .toString()
-    .padStart(2, "0");
-  const nextMinute = (total % 60).toString().padStart(2, "0");
-  return `${nextHour}:${nextMinute}`;
-}
+import { createTodoActions } from "./services/todo-actions";
+import {
+  completeTodoItem,
+  replaceTodo,
+  unlinkTodoFromSchedule,
+} from "../lib/todo-domain";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -156,103 +157,24 @@ export default function Home() {
   const dayRecords = dayData.records;
   const dayDiary = dayData.diary;
 
-  const changeDate = (date: string, nextView?: View) => {
+  const changeDate = useCallback((date: string, nextView?: View) => {
     setSelectedDate(date);
     const parsed = new Date(`${date}T00:00:00`);
     setMonthCursor(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
     if (nextView) setView(nextView);
-  };
+  }, []);
   const changeMobileView = (nextView: View) => {
     setView(nextView);
     setMobileMenuOpen(false);
   };
 
-  const createTodo = async (title: string) => {
-    if (!data || !data.todoStorageReady)
-      throw new Error("할 일 데이터베이스 설정이 필요해요");
-    const now = new Date().toISOString();
-    const item: Todo = {
-      id: newId(),
-      userId: data.user.id,
-      title,
-      memo: "",
-      priority: "normal",
-      status: "open",
-      completedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await upsertTodo(item);
-    setData((prev) => prev && { ...prev, todos: [item, ...prev.todos] });
-    setToast("할 일을 보관함에 담았어요");
-    return item;
-  };
-
-  const updateTodo = async (item: Todo) => {
-    await upsertTodo(item);
-    setData(
-      (prev) =>
-        prev && {
-          ...prev,
-          todos: prev.todos.map((todo) => (todo.id === item.id ? item : todo)),
-        },
-    );
-    setToast(
-      item.status === "done" ? "할 일을 완료했어요" : "할 일을 저장했어요",
-    );
-  };
-
-  const deleteTodo = async (item: Todo) => {
-    await removeTodo(item.id);
-    setData(
-      (prev) =>
-        prev && {
-          ...prev,
-          todos: prev.todos.filter((todo) => todo.id !== item.id),
-        },
-    );
-    setToast("할 일을 삭제했어요. 연결된 일정은 유지돼요");
-  };
-
-  const scheduleTodo = async (todo: Todo, date: string, startTime: string) => {
-    if (!data) return;
-    if (oneHourAfter(startTime) <= startTime)
-      throw new Error("일정 시작 시간은 오후 10시 50분 이전으로 선택해 주세요");
-    const schedule: Schedule = {
-      ...createBlankSchedule(date, data.user.id),
-      id: newId(),
-      title: todo.title,
-      memo: todo.memo,
-      startTime,
-      endTime: oneHourAfter(startTime),
-    };
-    const updatedTodo: Todo = {
-      ...todo,
-      status: "scheduled",
-      scheduleId: schedule.id,
-      updatedAt: new Date().toISOString(),
-    };
-    await upsertSchedule(schedule);
-    try {
-      await upsertTodo(updatedTodo);
-    } catch (error) {
-      await removeSchedule(schedule.id);
-      throw error;
-    }
-    setData((prev) =>
-      prev
-        ? {
-            ...prev,
-            schedules: [...prev.schedules, schedule],
-            todos: prev.todos.map((item) =>
-              item.id === updatedTodo.id ? updatedTodo : item,
-            ),
-          }
-        : prev,
-    );
-    changeDate(date);
-    setToast("할 일을 일정으로 옮겼어요");
-  };
+  const { createTodo, updateTodo, deleteTodo, scheduleTodo } =
+    createTodoActions({
+      data,
+      setData,
+      setToast,
+      onDateChange: changeDate,
+    });
 
   const saveSchedule = async (event: FormEvent) => {
     event.preventDefault();
@@ -393,12 +315,10 @@ export default function Home() {
       );
       const completedTodo =
         completedItem.status === "done" && linkedTodo
-          ? {
-              ...linkedTodo,
-              status: "done" as const,
-              completedAt: completedItem.completedAt,
-              updatedAt: new Date().toISOString(),
-            }
+          ? completeTodoItem(
+              linkedTodo,
+              completedItem.completedAt ?? new Date().toISOString(),
+            )
           : undefined;
       await Promise.all([
         upsertSchedule(completedItem),
@@ -414,9 +334,7 @@ export default function Home() {
                 )
               : [...prev.schedules, completedItem],
             todos: completedTodo
-              ? prev.todos.map((todo) =>
-                  todo.id === completedTodo.id ? completedTodo : todo,
-                )
+              ? replaceTodo(prev.todos, completedTodo)
               : prev.todos,
           },
       );
@@ -439,15 +357,10 @@ export default function Home() {
   const deleteSchedule = async (id: string) => {
     try {
       await removeSchedule(id);
+      const unlinkedAt = new Date().toISOString();
       const unlinkedTodos = (data?.todos ?? [])
         .filter((todo) => todo.scheduleId === id)
-        .map((todo) => ({
-          ...todo,
-          status: "open" as const,
-          scheduleId: undefined,
-          updatedAt: new Date().toISOString(),
-        }));
-      await Promise.all(unlinkedTodos.map(upsertTodo));
+        .map((todo) => unlinkTodoFromSchedule(todo, unlinkedAt));
       const unlinkedMap = new Map(unlinkedTodos.map((todo) => [todo.id, todo]));
       setData(
         (prev) =>
@@ -491,12 +404,7 @@ export default function Home() {
       );
       const todoUpdate =
         status === "cancelled" && linkedTodo
-          ? {
-              ...linkedTodo,
-              status: "open" as const,
-              scheduleId: undefined,
-              updatedAt: new Date().toISOString(),
-            }
+          ? unlinkTodoFromSchedule(linkedTodo, new Date().toISOString())
           : undefined;
       await Promise.all([
         upsertSchedule(item),
@@ -508,9 +416,7 @@ export default function Home() {
             ...prev,
             schedules: prev.schedules.map((s) => (s.id === item.id ? item : s)),
             todos: todoUpdate
-              ? prev.todos.map((todo) =>
-                  todo.id === todoUpdate.id ? todoUpdate : todo,
-                )
+              ? replaceTodo(prev.todos, todoUpdate)
               : prev.todos,
           },
       );
@@ -550,12 +456,10 @@ export default function Home() {
       ? data.todos.find((todo) => todo.scheduleId === scheduleUpdate.id)
       : undefined;
     const completedTodo = linkedTodo
-      ? {
-          ...linkedTodo,
-          status: "done" as const,
-          completedAt: scheduleUpdate?.completedAt ?? new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
+      ? completeTodoItem(
+          linkedTodo,
+          scheduleUpdate?.completedAt ?? new Date().toISOString(),
+        )
       : undefined;
     try {
       if (txDraft.id && editTransactionSeries && item.seriesId) {
@@ -652,9 +556,7 @@ export default function Home() {
                 )
               : [...prev.transactions, item],
             todos: completedTodo
-              ? prev.todos.map((todo) =>
-                  todo.id === completedTodo.id ? completedTodo : todo,
-                )
+              ? replaceTodo(prev.todos, completedTodo)
               : prev.todos,
           },
       );

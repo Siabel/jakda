@@ -479,3 +479,53 @@ test("provides a persisted todo inbox with schedule handoff", async () => {
   assert.match(integrityMigration, /prepare_schedule_delete/);
   assert.match(integrityMigration, /set_updated_at/);
 });
+
+test("keeps todo domain transitions consistent", async () => {
+  const {
+    completeTodoItem,
+    createScheduleFromTodo,
+    createTodoItem,
+    linkTodoToSchedule,
+    replaceTodo,
+    unlinkTodoFromSchedule,
+  } = await import("../lib/todo-domain.ts");
+  const createdAt = "2026-10-28T00:00:00.000Z";
+  const todo = createTodoItem(
+    "  건강검진 예약  ",
+    "user-1",
+    "todo-1",
+    createdAt,
+  );
+  assert.equal(todo.title, "건강검진 예약");
+  assert.equal(todo.status, "open");
+
+  const schedule = createScheduleFromTodo(
+    todo,
+    "2026-10-30",
+    "09:00",
+    "schedule-1",
+  );
+  assert.equal(schedule.endTime, "10:00");
+  assert.equal(schedule.userId, todo.userId);
+  assert.throws(
+    () => createScheduleFromTodo(todo, "2026-10-30", "23:00", "late"),
+    /오후 10시 50분 이전/,
+  );
+
+  const linked = linkTodoToSchedule(todo, schedule.id, createdAt);
+  assert.equal(linked.status, "scheduled");
+  assert.equal(linked.scheduleId, schedule.id);
+
+  const completed = completeTodoItem(linked, "2026-10-30T01:00:00.000Z");
+  assert.equal(completed.status, "done");
+  assert.ok(completed.completedAt);
+  const detachedDone = unlinkTodoFromSchedule(completed, createdAt);
+  assert.equal(detachedDone.status, "done");
+  assert.equal(detachedDone.scheduleId, undefined);
+  assert.ok(detachedDone.completedAt);
+
+  const detachedOpen = unlinkTodoFromSchedule(linked, createdAt);
+  assert.equal(detachedOpen.status, "open");
+  assert.equal(detachedOpen.completedAt, null);
+  assert.deepEqual(replaceTodo([todo], linked), [linked]);
+});
