@@ -879,6 +879,9 @@ export default function Home() {
               changeDate(schedule.date);
               setScheduleDraft(schedule);
             }}
+            onCompleteSchedule={(schedule) =>
+              void updateStatus(schedule, "done")
+            }
             onToast={setToast}
           />
         )}
@@ -970,7 +973,11 @@ export default function Home() {
           } else if (view === "records") {
             setRecordDraft(createBlankRecord(selectedDate, data.user.id));
           } else if (view === "todo") {
-            setToast("할 일 화면의 입력창에서 시안을 체험해 보세요");
+            const input = document.querySelector<HTMLInputElement>(
+              '.todo-quick-add input[aria-label="새 할 일"]',
+            );
+            input?.scrollIntoView({ behavior: "smooth", block: "center" });
+            input?.focus();
           } else {
             setScheduleDraft(createBlankSchedule(selectedDate, data.user.id));
           }

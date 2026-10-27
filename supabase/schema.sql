@@ -23,13 +23,23 @@ create table if not exists public.schedules (
   repeat_end_date date,
   series_id text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint schedules_id_user_unique unique (id, user_id),
+  constraint schedules_planned_time_range_check check (end_time > start_time),
+  constraint schedules_actual_time_range_check check (
+    (actual_start_time is null and actual_end_time is null)
+    or (
+      actual_start_time is not null
+      and actual_end_time is not null
+      and actual_end_time > actual_start_time
+    )
+  )
 );
 
 create table if not exists public.transactions (
   id text primary key default gen_random_uuid()::text,
   user_id uuid not null references auth.users(id) on delete cascade,
-  schedule_id text references public.schedules(id) on delete set null,
+  schedule_id text,
   type text not null check (type in ('income','expense')),
   amount bigint not null check (amount > 0),
   date date not null,
@@ -44,7 +54,12 @@ create table if not exists public.transactions (
   repeat_day smallint check (repeat_day between 1 and 31),
   repeat_end_date date,
   series_id text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint transactions_schedule_owner_fkey
+    foreign key (schedule_id, user_id)
+    references public.schedules(id, user_id)
+    on delete set null (schedule_id)
 );
 
 create table if not exists public.emotion_diaries (
@@ -64,26 +79,38 @@ create table if not exists public.emotion_diaries (
 create table if not exists public.daily_records (
   id text primary key default gen_random_uuid()::text,
   user_id uuid not null references auth.users(id) on delete cascade,
-  schedule_id text references public.schedules(id) on delete set null,
+  schedule_id text,
   date date not null,
   record_time time,
   title text not null,
   content text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint daily_records_schedule_owner_fkey
+    foreign key (schedule_id, user_id)
+    references public.schedules(id, user_id)
+    on delete set null (schedule_id)
 );
 
 create table if not exists public.todos (
   id text primary key default gen_random_uuid()::text,
   user_id uuid not null references auth.users(id) on delete cascade,
-  schedule_id text references public.schedules(id) on delete set null,
+  schedule_id text,
   title text not null check (char_length(trim(title)) between 1 and 120),
   memo text not null default '',
   priority text not null default 'normal' check (priority in ('high','normal','low')),
   status text not null default 'open' check (status in ('open','scheduled','done')),
   completed_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint todos_schedule_owner_fkey
+    foreign key (schedule_id, user_id)
+    references public.schedules(id, user_id)
+    on delete set null (schedule_id),
+  constraint todos_completion_state_check
+    check ((status = 'done') = (completed_at is not null)),
+  constraint todos_scheduled_link_check
+    check (status <> 'scheduled' or schedule_id is not null)
 );
 
 create index if not exists schedules_user_date_idx on public.schedules(user_id, date);
@@ -93,6 +120,51 @@ create index if not exists emotion_diaries_user_date_idx on public.emotion_diari
 create index if not exists daily_records_user_date_idx on public.daily_records(user_id, date);
 create index if not exists todos_user_status_created_idx on public.todos(user_id, status, created_at desc);
 create unique index if not exists todos_one_schedule_idx on public.todos(schedule_id) where schedule_id is not null;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create or replace function public.prepare_schedule_delete()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.todos
+  set schedule_id = null,
+      status = case when status = 'scheduled' then 'open' else status end,
+      updated_at = now()
+  where schedule_id = old.id and user_id = old.user_id;
+  return old;
+end;
+$$;
+
+drop trigger if exists schedules_prepare_delete on public.schedules;
+create trigger schedules_prepare_delete before delete on public.schedules
+for each row execute function public.prepare_schedule_delete();
+drop trigger if exists schedules_set_updated_at on public.schedules;
+create trigger schedules_set_updated_at before update on public.schedules
+for each row execute function public.set_updated_at();
+drop trigger if exists transactions_set_updated_at on public.transactions;
+create trigger transactions_set_updated_at before update on public.transactions
+for each row execute function public.set_updated_at();
+drop trigger if exists emotion_diaries_set_updated_at on public.emotion_diaries;
+create trigger emotion_diaries_set_updated_at before update on public.emotion_diaries
+for each row execute function public.set_updated_at();
+drop trigger if exists daily_records_set_updated_at on public.daily_records;
+create trigger daily_records_set_updated_at before update on public.daily_records
+for each row execute function public.set_updated_at();
+drop trigger if exists todos_set_updated_at on public.todos;
+create trigger todos_set_updated_at before update on public.todos
+for each row execute function public.set_updated_at();
 
 alter table public.schedules enable row level security;
 alter table public.transactions enable row level security;

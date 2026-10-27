@@ -94,10 +94,9 @@ test("includes account, place, and daily-record flows", async () => {
 
 test("keeps actual transactions when a schedule is deleted", async () => {
   const schema = await readFile(new URL("supabase/schema.sql", root), "utf8");
-  assert.match(
-    schema,
-    /schedule_id text references public\.schedules\(id\) on delete set null/i,
-  );
+  assert.match(schema, /foreign key \(schedule_id, user_id\)/i);
+  assert.match(schema, /references public\.schedules\(id, user_id\)/i);
+  assert.match(schema, /on delete set null \(schedule_id\)/i);
 });
 
 test("supports Korean holidays, minute-only times, and fixed recurrence", async () => {
@@ -431,30 +430,52 @@ test("keeps the database baseline reproducible and separates page calculations",
 });
 
 test("provides a persisted todo inbox with schedule handoff", async () => {
-  const [page, navigation, todoView, appData, types, styles, migration] =
-    await Promise.all([
-      readFile(new URL("app/page.tsx", root), "utf8"),
-      readFile(new URL("app/components/app-navigation.tsx", root), "utf8"),
-      readFile(new URL("app/components/views/todo-view.tsx", root), "utf8"),
-      readFile(new URL("lib/app-data.ts", root), "utf8"),
-      readFile(new URL("lib/types.ts", root), "utf8"),
-      readFile(new URL("app/styles/todo.css", root), "utf8"),
-      readFile(new URL("supabase/migrations/002_add_todos.sql", root), "utf8"),
-    ]);
+  const [
+    page,
+    navigation,
+    todoView,
+    appData,
+    types,
+    styles,
+    todoMigration,
+    integrityMigration,
+  ] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/app-navigation.tsx", root), "utf8"),
+    readFile(new URL("app/components/views/todo-view.tsx", root), "utf8"),
+    readFile(new URL("lib/app-data.ts", root), "utf8"),
+    readFile(new URL("lib/types.ts", root), "utf8"),
+    readFile(new URL("app/styles/todo.css", root), "utf8"),
+    readFile(new URL("supabase/migrations/002_add_todos.sql", root), "utf8"),
+    readFile(
+      new URL("supabase/migrations/003_data_integrity.sql", root),
+      "utf8",
+    ),
+  ]);
 
   assert.match(types, /| "todo"/);
   assert.match(types, /export type Todo =/);
   assert.match(page, /TodoView/);
   assert.match(page, /scheduleTodo/);
+  assert.match(page, /onCompleteSchedule/);
+  assert.match(page, /todo-quick-add input/);
+  assert.doesNotMatch(page, /시안을 체험해 보세요/);
   assert.match(navigation, /label="할 일"/);
   assert.match(todoView, /이 시간에 일정으로 담기/);
   assert.match(todoView, /onCreate/);
   assert.match(todoView, /onDelete/);
+  assert.match(todoView, /scrollIntoView/);
+  assert.match(todoView, /연결된 일정의 완료 상태/);
   assert.doesNotMatch(todoView, /initialTodos|화면 시안/);
   assert.match(appData, /upsertTodo/);
   assert.match(appData, /removeTodo/);
   assert.match(styles, /.todo-layout/);
-  assert.match(migration, /create table if not exists public\.todos/);
-  assert.match(migration, /enable row level security/);
-  assert.match(migration, /auth\.uid\(\) = user_id/);
+  assert.match(todoMigration, /create table if not exists public\.todos/);
+  assert.match(todoMigration, /enable row level security/);
+  assert.match(todoMigration, /auth\.uid\(\) = user_id/);
+  assert.match(integrityMigration, /foreign key \(schedule_id, user_id\)/);
+  assert.match(integrityMigration, /schedules_planned_time_range_check/);
+  assert.match(integrityMigration, /todos_completion_state_check/);
+  assert.match(integrityMigration, /prepare_schedule_delete/);
+  assert.match(integrityMigration, /set_updated_at/);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { DragEvent, FormEvent, useMemo, useState } from "react";
+import { DragEvent, FormEvent, useMemo, useRef, useState } from "react";
 import type {
   Schedule,
   Todo,
@@ -31,6 +31,7 @@ type TodoViewProps = {
   onDelete: (todo: Todo) => Promise<void>;
   onSchedule: (todo: Todo, date: string, startTime: string) => Promise<void>;
   onOpenSchedule: (schedule: Schedule) => void;
+  onCompleteSchedule: (schedule: Schedule) => void;
   onToast: (message: string) => void;
 };
 
@@ -43,6 +44,7 @@ export function TodoView({
   onDelete,
   onSchedule,
   onOpenSchedule,
+  onCompleteSchedule,
   onToast,
 }: TodoViewProps) {
   const [filter, setFilter] = useState<TodoStatus>("open");
@@ -58,6 +60,7 @@ export function TodoView({
   );
   const [saving, setSaving] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const schedulePanelRef = useRef<HTMLElement>(null);
 
   const visible = useMemo(
     () => todos.filter((todo) => todo.status === filter),
@@ -122,6 +125,18 @@ export function TodoView({
   };
 
   const toggleDone = (todo: Todo) => {
+    const schedule = todo.scheduleId
+      ? schedules.find((item) => item.id === todo.scheduleId)
+      : undefined;
+    if (schedule) {
+      if (todo.status === "done") {
+        onToast("연결된 일정의 완료 상태에서 확인해 주세요");
+        onOpenSchedule(schedule);
+      } else {
+        onCompleteSchedule(schedule);
+      }
+      return;
+    }
     const done = todo.status !== "done";
     void run(() =>
       onUpdate({
@@ -130,6 +145,21 @@ export function TodoView({
         completedAt: done ? new Date().toISOString() : null,
         updatedAt: new Date().toISOString(),
       }),
+    );
+  };
+
+  const planTodo = (todo: Todo) => {
+    const schedule = todo.scheduleId
+      ? schedules.find((item) => item.id === todo.scheduleId)
+      : undefined;
+    selectTodo(todo);
+    if (schedule) {
+      onOpenSchedule(schedule);
+      return;
+    }
+    window.setTimeout(
+      () => schedulePanelRef.current?.scrollIntoView({ behavior: "smooth" }),
+      0,
     );
   };
 
@@ -271,7 +301,7 @@ export function TodoView({
                   <button
                     type="button"
                     className="todo-plan-button"
-                    onClick={() => selectTodo(todo)}
+                    onClick={() => planTodo(todo)}
                   >
                     {todo.status === "scheduled" ? "일정 보기" : "일정으로"}
                   </button>
@@ -287,6 +317,7 @@ export function TodoView({
           </div>
         </section>
         <aside
+          ref={schedulePanelRef}
           className={`todo-schedule-panel ${dragging ? "dragging" : ""}`}
           onDragEnter={() => setDragging(true)}
           onDragLeave={() => setDragging(false)}
